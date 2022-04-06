@@ -5,7 +5,10 @@
 
 ### Prerequisites
 
-What things you need to install the software and how to install them
+Matlab2021b
+Simulink
+Python 3.10
+
 
 ```
 Give examples
