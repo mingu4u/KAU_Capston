@@ -5,6 +5,4 @@
 
 Mingu ,Golden goblin, HUH
 
-
-![test1](https://user-images.githubusercontent.com/9380159/161888727-713ec819-f528-47ca-941f-296569e8f870.PNG)
-
+![IMG_0123](https://user-images.githubusercontent.com/9380159/161889910-20057acd-6f7b-4292-ad9b-2123be353ef3.PNG)
