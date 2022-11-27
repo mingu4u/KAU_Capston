@@ -12,6 +12,7 @@ Simulink
 Python 3.10
 
 ### Wiring diagram
+![Wiringdiagram](https://user-images.githubusercontent.com/9380159/204148810-00b8394f-80f9-45a0-a803-802bf47bf4ad.png)
 
 ### Hardware
 Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
@@ -23,6 +24,5 @@ Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
 * **Golden goblin**
 * **HUH**
 
-
-
-
+## Special thanks
+Prof. Lee, Donghun
