@@ -5,16 +5,17 @@
 
 ### Prerequisites
 
-Matlab2021b
+Matlab2022a
 
 Simulink
 
 Python 3.10
 
+### Wiring diagram
 
-```
-Give examples
-```
+### Hardware
+Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
+
 
 ## Authors
 
