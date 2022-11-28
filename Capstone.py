@@ -32,11 +32,9 @@ address = 0x68
 bus = smbus.SMBus(1)
 imu = MPU9250.MPU9250(bus, address)
 imu.begin()
-
-accel = 0
-
-def getmpu9250Data(dt, roll, i, tau ):
-    global prevgyro, accel
+z2dot_prev = 0
+def getmpu9250Data(dt, roll, i, tau):
+    global prevgyro, z2dot_prev
     imu.readSensor()
     imu.computeOrientation()
     if i ==  0:
@@ -45,9 +43,14 @@ def getmpu9250Data(dt, roll, i, tau ):
     gyroLPF = tau*prevgyro + (1-tau)*gyro
     alpha = 0.99
     roll = (alpha*(roll + gyro*dt))+((1-alpha)*imu.pitch)
-    #print (roll)
-    accel = imu.AccelVals[1]
-    return roll, gyroLPF, gyro
+    Ax = imu.AccelVals[1]
+    Az = imu.AccelVals[2]
+    Ay = imu.AccelVals[0]
+    z2dot = -Az*math.cos(roll*3.141592/180) - Ay*math.sin(roll*3.141592/180) - 9.9
+    z2dot = 0.8*z2dot_prev + 0.2*z2dot
+    z2dot_prev = z2dot
+#    print("Ay : {0} Az : {1} z2dot : {2}".format(Ay,Az,z2dot))
+    return roll, gyroLPF, gyro, z2dot
 
 # Tfmini
 ser = serial.Serial("/dev/ttyAMA0", 115200)
@@ -55,26 +58,27 @@ ser = serial.Serial("/dev/ttyAMA0", 115200)
 def getTFminiData():
     count = ser.in_waiting
     if count > 8:
-        recv = ser.read(9)  
-        ser.reset_input_buffer()  
+        recv = ser.read(9)
+        ser.reset_input_buffer()
 
-        
         if recv[0] == 0x59 and recv[1] == 0x59:     #python3
             distance = (recv[2] + recv[3] * 256)/100
             #print('distance :', distance)
             ser.reset_input_buffer()
             return distance
 
-
 predistance = -1
 H_iterm = H_dterm_prev = prevheight_Rate = 0
+height_Error_prev = 0
 
 def disPID(CMD, distance, dt, kp1, ki1, kd1, tau2, tau):
-    global predistance, H_iterm, H_dterm_prev
+    global predistance, H_iterm, H_dterm_prev, height_Error_prev
     distance = tau*predistance + (1-tau)*distance
     height_Error = CMD - distance
     pterm = height_Error * kp1
-    dterm = -kd1 * (distance - predistance)/dt
+    dterm = kd1 * (height_Error - height_Error_prev)/dt
+    height_Error_prev = height_Error
+    #dterm = -kd1 * (distance - predistance)/dt
     H_iterm += ki1 * height_Error * dt
     dtermLPF = tau2 * H_dterm_prev + (1-tau2)*dterm
     H_dterm_prev = dtermLPF
@@ -84,31 +88,30 @@ def disPID(CMD, distance, dt, kp1, ki1, kd1, tau2, tau):
     output = pterm + H_iterm + dtermLPF
     return output, pterm, H_iterm, dterm, dtermLPF, distance
 
-def disPPID(CMD, distance, dt, kp1, kp1_1, ki1, kd1, tau2):
-    global predistance, H_iterm, H_dterm_prev, prevheight_Rate
+comp_vel = 0
+H_dterm_prev = 0
+distance_vel_prev = 0
+
+def disPPID(CMD, distance,z2dot, dt, kp1, kp2, ki1, kd1, tau,d_tau):
+    global comp_vel, predistance, H_iterm, H_dterm_prev, distance_vel_prev
     height_Error = CMD - distance
-    height_RateCMD = kp1 * height_Error
-    height_Rate = (distance-predistance)/dt
-    height_RateError = height_RateCMD - height_Rate
-    height_RateDelta = height_Rate - prevheight_Rate
-    prevheight_Rate = height_Rate
-
-    pterm = height_Error * kp1_1
-    dterm = -kd1 * (height_RateDelta/dt)
-    H_iterm += ki1 * height_RateError * dt
-    dtermLPF = tau2 * H_dterm_prev + (1-tau2)*dterm
-    H_dterm_prev = dtermLPF
+    VelCMD = height_Error * kp1
+    Vel = (distance - predistance)/dt
+    distance_vel = (distance-predistance)/dt
+    distance_vel = tau*distance_vel_prev + (1-tau)*(distance_vel)
+    distance_vel_prev = distance_vel
     predistance = distance
-
-    dtermLPF = max(dtermLPF, -10)
-    dtermLPF = min(dtermLPF, 10)
-    output = pterm + H_iterm + dtermLPF
-
-#    print(pterm, H_iterm, dtermLPF, output, distance)
-
-    return output,height_RateCMD, pterm, H_iterm, dterm, dtermLPF, height_Rate
-
-
+    comp_vel = tau * (comp_vel + z2dot*dt) + (1-tau)*(distance_vel)
+    VelError = VelCMD - comp_vel
+    pterm = VelError * kp2
+    H_iterm += ki1 * VelError * dt
+    dterm = -kd1 * z2dot
+    H_dterm_LPF = d_tau*(H_dterm_prev) + (1-d_tau)*(dterm)
+    H_dterm_prev = H_dterm_LPF
+    output = pterm + H_iterm + H_dterm_LPF
+    output = min(output,100)
+    output = max(output,-100)
+    return output,VelCMD, pterm, H_iterm, dterm,comp_vel, H_dterm_LPF
 
 #PPID
 iterm1 = prevgyro = dterm_prev = 0
@@ -120,17 +123,13 @@ def PPID(CMD, roll, gyro, dt, kp1, kp1_1, ki1, kd1, tau2):
     PPID_Error = CMD - roll
     RateCMD = kp1 * PPID_Error
 
-#    RateCMD += 0.1 * PPID_Error * dt
-#    max(RateCMD, -10)
-#    min(RateCMD, 10)
-
     RateError = RateCMD - gyro
     RateDelta = gyro - prevgyro
     prevgyro = gyro
 
     pterm1 = kp1_1 * RateError
     iterm1 += ki1 * RateError * dt
-    dterm_now = -kd1 * (RateDelta/dt)
+    dterm_now = -kd1 * (RateDelta)/dt
     dtermLPF = tau2 * dterm_prev + (1-tau2) * dterm_now
     dterm_prev = dtermLPF
 
@@ -149,15 +148,15 @@ def PPID(CMD, roll, gyro, dt, kp1, kp1_1, ki1, kd1, tau2):
 ESC_GPIO_L = 12 # left motor
 ESC_GPIO_R = 13 # right motor
 
-Trim_PWM = 1520
+Trim_PWM = 1512
 
 def setmotorPWM(output,houtput, angle):
     global Trim_PWM
-    compensate = ((math.sqrt(1.45*9.81/(2*2.434e-05*math.cos(angle*3.1415/180)))+940.17)/0.90555-Trim_PWM)/10
+    compensate = ((math.sqrt(1.45*9.81/(2*2.434e-05*math.cos(angle*3.1415/180)))+940.17)/0.90555-Trim_PWM)/11
     PWM_L = Trim_PWM + output + houtput + compensate
     PWM_L = min(PWM_L, 1900)
     PWM_L = max(PWM_L, 1100)
-    pi.set_servo_pulsewidth(ESC_GPIO_L, PWM_L) 
+    pi.set_servo_pulsewidth(ESC_GPIO_L, PWM_L)
     PWM_R = Trim_PWM - output + houtput + compensate
     PWM_R = min(PWM_R, 1900)
     PWM_R = max(PWM_R, 1100)
@@ -235,9 +234,9 @@ def loops():
     dis_curtime = time.time()
     rt, h_rt = 0.5, 5.0
     S_tau = 0.4
-    disLPFtau = 0.9
-    kp1, kp1_1, ki1, kd1, tau2 = 3.0, 0.7, 0.25, 0.01, 0.8
-    H_kp1, H_kp, H_ki, H_kd, H_tau =  0.0, 90.0, 30.0, 15.0, 0.55
+    disLPFtau = 0.0
+    kp1, kp1_1, ki1, kd1, tau2 = 4.0, 0.7, 0.25, 0.01, 0.83
+    H_kp1, H_kp, H_ki, H_kd, H_tau, H_D_tau =  4.0, 150.0, 30.0, 7.0, 0.98, 0.75
     deg_dterm1_LPF = 0
     while True:
         if stop_check == 1:
@@ -269,7 +268,7 @@ def loops():
             H_CMD, total_dt_h  = inputshaping(dt, h_rt, H_CMD_input, H_CMD_inputprev, total_dt_h)
         else:
             H_CMD_inputprev = H_CMD_input
-        roll, gyro, gyro_raw = getmpu9250Data(dt, roll, i, S_tau)
+        roll, gyro, gyro_raw, z2dot = getmpu9250Data(dt, roll, i, S_tau)
         if i == 1:
             output, deg_pterm, deg_pterm1, deg_iterm1, deg_dterm1_now, deg_dterm1_LPF  = PPID(CMD, roll, gyro, dt, kp1, kp1_1, ki1, kd1, tau2)
             distance_temp = getTFminiData()
@@ -285,10 +284,12 @@ def loops():
                 #houtput, dis_RateCMD, dis_pterm, dis_iterm, dis_dterm_now, dis_dterm_LPF, dis_rate = disPPID(H_CMD, distance, dt, H_kp1 ,H_kp, H_ki, H_kd, H_tau )
                 #f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12} {13} {14} {15} {16} {17} {18} {19} {20}\n".format(dt, dis_dt, roll, gyro, deg_pterm,deg_pterm1, deg_iterm1, deg_dterm1_now, deg_dterm1_LPF, distance, dis_pterm, dis_iterm, dis_dterm_now, dis_dterm_LPF, PWM_L, PWM_R, gyro_raw, CMD, H_CMD, dis_RateCMD, dis_rate))
                 #distance = dis_LPF(distance, disLPFtau)
-                houtput, dis_pterm, dis_iterm, dis_dterm_now, dis_dterm_LPF, distanceLPF = disPID(H_CMD, distance, dt, H_kp, H_ki, H_kd, H_tau, disLPFtau)
+#                houtput, dis_pterm, dis_iterm, dis_dterm_now, dis_dterm_LPF, distanceLPF = disPID(H_CMD, distance, dt, H_kp, H_ki, H_kd, H_tau, disLPFtau)
+                houtput,VelCMD,dis_pterm, dis_iterm,dis_dterm,comp_vel,H_dterm_LPF  = disPPID(H_CMD, distance, z2dot, dt, H_kp1, H_kp, H_ki, H_kd, H_tau,H_D_tau)
                 PWM_L, PWM_R = setmotorPWM(output, houtput, roll)
-                f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12} {13} {14} {15} {16} {17} {18} \n".format(dt, dis_dt, roll, gyro, deg_pterm,deg_pterm1, deg_iterm1, deg_dterm1_now, deg_dterm1_LPF, distanceLPF, dis_pterm, dis_iterm, dis_dterm_now, dis_dterm_LPF, PWM_L, PWM_R, gyro_raw, CMD, H_CMD))
-#                f.write("{0} {1}\n".format(CMD, H_CMD))
+                f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12} {13} {14} {15} {16} {17} \n".format(dt, roll, gyro, deg_pterm,deg_pterm1, deg_iterm1, deg_dterm1_LPF, distance, VelCMD,comp_vel, dis_pterm, dis_iterm, H_dterm_LPF, PWM_L, PWM_R, gyro_raw, CMD, H_CMD))
+#               f.write("{0} {1} {2} {3} {4} {5} {6} {7} {8} {9} {10} {11} {12} \n".format(dt, distance, z2dot, H_CMD,comp_vel,dis_pterm,dis_iterm,dis_dterm,houtput,VelCMD,H_dterm_LPF,PWM_L, PWM_R))
+#                f.write("{0} {1} {2}\n".format(dt, z2dot, distance))
         i = 1
 
 
