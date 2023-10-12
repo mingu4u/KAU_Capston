@@ -3,6 +3,8 @@
 ## KoreaAeroSpace University Capstone Design
 ![IMG_0123](https://user-images.githubusercontent.com/9380159/161889910-20057acd-6f7b-4292-ad9b-2123be353ef3.PNG)
 
+
+
 ### Prerequisites
 
 Matlab2022a
@@ -16,6 +18,7 @@ Python 3.10
 
 ### Hardware
 Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
+<img width="708" alt="드론 HW" src="https://github.com/mingu4u/KAU_Capston/assets/97663670/55a5599b-8d27-432f-9bc5-916a4bc79895">
 
 ### Reference
 https://github.com/TFmini/TFmini-RaspberryPi
