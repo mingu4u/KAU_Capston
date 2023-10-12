@@ -27,6 +27,7 @@ Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
 
 > Angle Controller
 <img width="559" alt="image" src="https://github.com/mingu4u/KAU_Capston/assets/97663670/fb688aa6-a5c6-4197-8bbf-5da290ca396e">
+
 ### Reference
 https://github.com/TFmini/TFmini-RaspberryPi
 
