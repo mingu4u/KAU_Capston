@@ -22,7 +22,8 @@ Raspberrypi4, TFmini-S, Mpu9250, Tmotor v4006, X40, 1455prop, TATTU PLUS
 
 ## Controller Structure
 > Height Controller
-<img width="21" alt="image" src="https://github.com/mingu4u/KAU_Capston/assets/97663670/baf95486-30ab-49f3-93ee-222cb92c9fcd">
+<img width="526" alt="image" src="https://github.com/mingu4u/KAU_Capston/assets/97663670/aa9d6c5f-e04e-4d84-87b8-1324a382937d">
+
 
 > Angle Controller
 <img width="559" alt="image" src="https://github.com/mingu4u/KAU_Capston/assets/97663670/fb688aa6-a5c6-4197-8bbf-5da290ca396e">
